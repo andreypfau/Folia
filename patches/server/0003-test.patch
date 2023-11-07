@@ -1,10 +1,8 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Spottedleaf <Spottedleaf@users.noreply.github.com>
-Date: Sun, 2 Oct 2022 21:28:53 -0700
-Subject: [PATCH] Threaded Regions
+From: Andrey Pfau <andreypfau@ton.org>
+Date: Tue, 7 Nov 2023 09:03:48 +0400
+Subject: [PATCH] test
 
-See https://docs.papermc.io/folia/reference/overview and
-https://docs.papermc.io/folia/reference/region-logic
 
 diff --git a/src/main/java/ca/spottedleaf/concurrentutil/map/SWMRInt2IntHashTable.java b/src/main/java/ca/spottedleaf/concurrentutil/map/SWMRInt2IntHashTable.java
 new file mode 100644
@@ -12103,7 +12101,7 @@ index 5afeb59ff25fed2d565407acacffec8383398006..047e817eae19800d146970a3ab44913e
      // Paper end - optimise chunk tick iteration
  
 diff --git a/src/main/java/net/minecraft/server/level/ChunkMap.java b/src/main/java/net/minecraft/server/level/ChunkMap.java
-index 0c2617574e21037d94ac56ad08b490f9bca5c5af..a1cbf387c72482034eeee6be8a5c2228131601a9 100644
+index 28c6ec04750daca3d77a0cee2b9f17f2508662cc..a1cbf387c72482034eeee6be8a5c2228131601a9 100644
 --- a/src/main/java/net/minecraft/server/level/ChunkMap.java
 +++ b/src/main/java/net/minecraft/server/level/ChunkMap.java
 @@ -136,8 +136,8 @@ public class ChunkMap extends ChunkStorage implements ChunkHolder.PlayerProvider
@@ -12590,7 +12588,7 @@ index 0c2617574e21037d94ac56ad08b490f9bca5c5af..a1cbf387c72482034eeee6be8a5c2228
 +                // Folia end - region threading
  
                  // CraftBukkit start - respect vanish API
--                if (!player.getBukkitEntity().canSee(this.entity.getBukkitEntity())) {
+-                if (flag && !player.getBukkitEntity().canSee(this.entity.getBukkitEntity())) { // Paper - only consider hits
 +                if (flag && (!io.papermc.paper.util.TickThread.isTickThreadFor(player) || !player.getBukkitEntity().canSee(this.entity.getBukkitEntity()))) { // Folia - region threading
                      flag = false;
                  }
