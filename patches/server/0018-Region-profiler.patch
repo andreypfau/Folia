@@ -1,80 +1,8 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Spottedleaf <Spottedleaf@users.noreply.github.com>
-Date: Tue, 3 Oct 2023 06:03:34 -0700
+From: Andrey Pfau <andreypfau@ton.org>
+Date: Tue, 7 Nov 2023 10:30:40 +0400
 Subject: [PATCH] Region profiler
 
-Profiling for a region starts with the /profiler command.
-The usage for /profiler:
-/profiler <world> <block x> <block z> <time in s> [radius, default 100 blocks]
-
-Any region within the radius of the specified block coordinates
-will be profiled. The profiling will stop after the specified
-time has passed.
-
-Once the profiler finishes, it will place a report in
-the directory ./profiler/<id>.
-
-Since regions can split into smaller regions, or merge into
-other regions, the profiler will track this information. If
-a profiled region splits, then all of the regions it splits
-into are attached to the same profiler instance. If a profiled
-region merges into another region, then the merged region is
-profiled. This information is tracked and logged into the
-"journal.txt" file contained in the report directory. The
-journal tracks the region ids for the merge/split operations.
-
-Region profiling is placed into the "region-X.txt" file where
-X is the region id inside the profile directory. The header
-of the file describes some stats about the region, namely
-total profiling duration, ticks, utilisation, TPS, and MSPT.
-
-Then, the timing tree is follows. The format is as specified:
-
-There are two types of data recorded: Timers and Counters.
-
-Timers are specified as follows:
-<indent><name> X% total, Y% parent, self A% total, self B% children, avg D sum E, Fms raw sum
-The above specifies the format for a named timer.
-
-The <indent> specifies the number of parent timers.
-
-"X" represents the percentage of time the timer took relative
-to the entire profiling instance.
-
-"Y" represents the percentage of time the timer took relative
-to its _parents_ timer. For example:
-```
-Full Tick 100.000% total, 100.000% parent, self 0.889% total, self 0.889% children, avg 200.000 sum 200, 401.300ms raw sum
-|+++Tick World: minecraft:overworld 81.409% total, 81.409% parent, self 1.873% total, self 2.301% children, avg 1.000 sum 200, 326.694ms raw sum
-|---|---Entity Tick 56.784% total, 69.751% parent, self 6.049% total, self 10.652% children, avg 1.000 sum 200, 227.874ms raw sum
-```
-"Entity Tick" measured 69.751% of the time for the "Tick World: minecraft:overworld" timer.
-
-"A" represents the self time relative to the entire profiling instance.
-The self time is the amount of time for a timer that is _not_ measured
-by a child timer.
-
-"B" represents the self time relative to its _parents_ timer.
-
-"D" represents the average number of times the timer is invoked relative to
-its parent.
-For example:
-```
-|---|---|---Entity Tick: bat 2.642% total, 7.343% parent, self 2.642% total, self 100.000% children, avg 14.975 sum 2,995, 23.127ms raw sum
-```
-In this case, an average of 14.975 bats were ticked for every
-time the "Entity Tick" timer was invoked.
-
-"E" represents the total number of times the timer is invoked.
-
-"F" represents the total raw time accumulated by the timer.
-
-Counters are specified as follows:
-<indent>#<name> avg X sum Y
-
-The X is the average number of times the counter is invoked
-relative to the parent, exactly similar to the D field of Timers,
-where Y is the total number of times the counter is invoked.
 
 diff --git a/src/main/java/ca/spottedleaf/leafprofiler/LProfileGraph.java b/src/main/java/ca/spottedleaf/leafprofiler/LProfileGraph.java
 new file mode 100644
@@ -1376,7 +1304,7 @@ index c06bed93f6a701b1639c1cc334802e7b802431a5..e635f21e3c9c000da9c9da9bf2ec9ed8
                          if (exception instanceof ReportedException) {
                              ReportedException reportedexception = (ReportedException) exception;
 diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
-index f9cf331202d0768a054e575c8909369920b3d59f..2f2a8a0c05024115f3b7bd69ae400fadff2f36c5 100644
+index 5ded3dbc379f199ed735b6ce0ebf6a2e3485f93b..4b189b54c8f326939a7b9ffdfb35edfb7d8cee63 100644
 --- a/src/main/java/net/minecraft/server/MinecraftServer.java
 +++ b/src/main/java/net/minecraft/server/MinecraftServer.java
 @@ -1462,6 +1462,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
@@ -1460,7 +1388,7 @@ index f9cf331202d0768a054e575c8909369920b3d59f..2f2a8a0c05024115f3b7bd69ae400fad
              } catch (Throwable throwable) {
                  // Spigot Start
 diff --git a/src/main/java/net/minecraft/server/level/ChunkMap.java b/src/main/java/net/minecraft/server/level/ChunkMap.java
-index a1cbf387c72482034eeee6be8a5c2228131601a9..0f7e53dbac964391763bf6b380e65ce955a8a7a5 100644
+index cf8993f9f419850467e047b55e11a30f15d29689..a8bb62bdefff890bfcd2ed1842c29fd9f6da4c31 100644
 --- a/src/main/java/net/minecraft/server/level/ChunkMap.java
 +++ b/src/main/java/net/minecraft/server/level/ChunkMap.java
 @@ -466,16 +466,21 @@ public class ChunkMap extends ChunkStorage implements ChunkHolder.PlayerProvider
@@ -1518,7 +1446,7 @@ index a1cbf387c72482034eeee6be8a5c2228131601a9..0f7e53dbac964391763bf6b380e65ce9
      // Folia end - region threading - replace entity tracking ticking
  
 diff --git a/src/main/java/net/minecraft/server/level/ServerChunkCache.java b/src/main/java/net/minecraft/server/level/ServerChunkCache.java
-index 18735dbd0d2bae1576d2bdb7402d98e9affbd599..72a5973c6e150533ec70496d72b53c80a142eef7 100644
+index a97c0a86d7a07041d1f8e9c6ea59eb4cce1243e6..4484063433a3dbf87e244a7857d85cc732f6ccd2 100644
 --- a/src/main/java/net/minecraft/server/level/ServerChunkCache.java
 +++ b/src/main/java/net/minecraft/server/level/ServerChunkCache.java
 @@ -436,16 +436,23 @@ public class ServerChunkCache extends ChunkSource {
@@ -1629,7 +1557,7 @@ index 18735dbd0d2bae1576d2bdb7402d98e9affbd599..72a5973c6e150533ec70496d72b53c80
              // Folia end - region threading
              // Paper end - optimise chunk tick iteration
 diff --git a/src/main/java/net/minecraft/server/level/ServerLevel.java b/src/main/java/net/minecraft/server/level/ServerLevel.java
-index 32fdb3d70442257201472f9f1c1ad4664ca735d7..02937e40d429f42643f77b17c04277be535dc434 100644
+index 1f838821660afb39bcec0abedab9686105cb6844..55c219f32beee4c433c0f2aa652cbf5e48a8ce75 100644
 --- a/src/main/java/net/minecraft/server/level/ServerLevel.java
 +++ b/src/main/java/net/minecraft/server/level/ServerLevel.java
 @@ -891,6 +891,7 @@ public class ServerLevel extends Level implements WorldGenLevel {
@@ -1653,7 +1581,7 @@ index 32fdb3d70442257201472f9f1c1ad4664ca735d7..02937e40d429f42643f77b17c04277be
 +            } finally { profiler.stopTimer(ca.spottedleaf.leafprofiler.LProfilerRegistry.FLUID_TICK); } // Folia - profiler
              gameprofilerfiller.pop();
          }
-         timings.scheduledBlocks.stopTiming(); // Paper
+         this.timings.scheduledBlocks.stopTiming(); // Paper
  
          gameprofilerfiller.popPush("raid");
          this.timings.raids.startTiming(); // Paper - timings
@@ -1668,16 +1596,16 @@ index 32fdb3d70442257201472f9f1c1ad4664ca735d7..02937e40d429f42643f77b17c04277be
 +        } finally { profiler.stopTimer(ca.spottedleaf.leafprofiler.LProfilerRegistry.CHUNK_PROVIDER_TICK); } // Folia - profiler
          this.timings.chunkProviderTick.stopTiming(); // Paper - timings
          gameprofilerfiller.popPush("blockEvents");
-         timings.doSounds.startTiming(); // Spigot
+         this.timings.doSounds.startTiming(); // Spigot
 +        profiler.startTimer(ca.spottedleaf.leafprofiler.LProfilerRegistry.BLOCK_EVENT_TICK); try { // Folia - profiler
          this.runBlockEvents();
 +        } finally { profiler.stopTimer(ca.spottedleaf.leafprofiler.LProfilerRegistry.BLOCK_EVENT_TICK); } // Folia - profiler
-         timings.doSounds.stopTiming(); // Spigot
+         this.timings.doSounds.stopTiming(); // Spigot
          regionizedWorldData.setHandlingTick(false); // Folia - regionised ticking
          gameprofilerfiller.pop();
 @@ -941,6 +952,7 @@ public class ServerLevel extends Level implements WorldGenLevel {
              gameprofilerfiller.push("entities");
-             timings.tickEntities.startTiming(); // Spigot
+             this.timings.tickEntities.startTiming(); // Spigot
              if (this.dragonFight != null) {
 +                profiler.startTimer(ca.spottedleaf.leafprofiler.LProfilerRegistry.DRAGON_FIGHT_TICK); try { // Folia - profiler
                  if (io.papermc.paper.util.TickThread.isTickThreadFor(this, this.dragonFight.origin)) { // Folia - region threading
@@ -1691,7 +1619,7 @@ index 32fdb3d70442257201472f9f1c1ad4664ca735d7..02937e40d429f42643f77b17c04277be
              }
  
              org.spigotmc.ActivationRange.activateEntities(this); // Spigot
-             timings.entityTick.startTiming(); // Spigot
+             this.timings.entityTick.startTiming(); // Spigot
 +            profiler.startTimer(ca.spottedleaf.leafprofiler.LProfilerRegistry.ENTITY_TICK); try { // Folia - profiler
              regionizedWorldData.forEachTickingEntity((entity) -> { // Folia - regionised ticking
                  if (!entity.isRemoved()) {
@@ -1701,8 +1629,8 @@ index 32fdb3d70442257201472f9f1c1ad4664ca735d7..02937e40d429f42643f77b17c04277be
                  }
              });
 +            } finally { profiler.stopTimer(ca.spottedleaf.leafprofiler.LProfilerRegistry.ENTITY_TICK); } // Folia - profiler
-             timings.entityTick.stopTiming(); // Spigot
-             timings.tickEntities.stopTiming(); // Spigot
+             this.timings.entityTick.stopTiming(); // Spigot
+             this.timings.tickEntities.stopTiming(); // Spigot
              gameprofilerfiller.pop();
 +            profiler.startTimer(ca.spottedleaf.leafprofiler.LProfilerRegistry.TILE_ENTITY); try { // Folia - profiler
              this.tickBlockEntities();
@@ -1769,7 +1697,7 @@ index 32fdb3d70442257201472f9f1c1ad4664ca735d7..02937e40d429f42643f77b17c04277be
          } else {
              passenger.stopRiding();
 diff --git a/src/main/java/net/minecraft/server/players/PlayerList.java b/src/main/java/net/minecraft/server/players/PlayerList.java
-index 7bfbcda5cf086c3c50f8cb202ceaf685a899141c..9da89e8e9569666227081ebc6cb1f0348e1a183d 100644
+index 2a02f212a2d297e08bd8b3ac5347849c35388a27..2aa7f73572859a02c8873e4cbcf6a780134a39e9 100644
 --- a/src/main/java/net/minecraft/server/players/PlayerList.java
 +++ b/src/main/java/net/minecraft/server/players/PlayerList.java
 @@ -1301,6 +1301,7 @@ public abstract class PlayerList {
@@ -1822,7 +1750,7 @@ index 73871f456a85bda1e51f54986d0e61fb629822e8..3f3494c20cd15a721090f1b36293562a
          this.factory = factory;
          this.category = spawnGroup;
 diff --git a/src/main/java/net/minecraft/world/level/Level.java b/src/main/java/net/minecraft/world/level/Level.java
-index f9641a54b2d1f2eed2a48323cfa6cdd67dafdf00..0ff6764c747ee6258ab9d722b48c24f0ddb2afdf 100644
+index 7e1e877e1718f8952196601f03bdc4f2ed06d6d2..9a6adad57d046f72f998d019ddbda50403157ea1 100644
 --- a/src/main/java/net/minecraft/world/level/Level.java
 +++ b/src/main/java/net/minecraft/world/level/Level.java
 @@ -226,6 +226,9 @@ public abstract class Level implements LevelAccessor, AutoCloseable {
@@ -1853,16 +1781,16 @@ index f9641a54b2d1f2eed2a48323cfa6cdd67dafdf00..0ff6764c747ee6258ab9d722b48c24f0
          ProfilerFiller gameprofilerfiller = this.getProfiler();
  
          gameprofilerfiller.push("blockEntities");
-         timings.tileEntityPending.startTiming(); // Spigot
+         this.timings.tileEntityPending.startTiming(); // Spigot
          final io.papermc.paper.threadedregions.RegionizedWorldData regionizedWorldData = ((ServerLevel)this).getCurrentWorldData(); // Folia - regionised ticking
          regionizedWorldData.seTtickingBlockEntities(true); // Folia - regionised ticking
 +        profiler.startTimer(ca.spottedleaf.leafprofiler.LProfilerRegistry.TILE_ENTITY_PENDING); try { // Folia - profiler
          regionizedWorldData.pushPendingTickingBlockEntities(); // Folia - regionised ticking
 +        } finally { profiler.stopTimer(ca.spottedleaf.leafprofiler.LProfilerRegistry.TILE_ENTITY_PENDING); } // Folia - profiler
          List<TickingBlockEntity> blockEntityTickers = regionizedWorldData.getBlockEntityTickers(); // Folia - regionised ticking
-         timings.tileEntityPending.stopTiming(); // Spigot
+         this.timings.tileEntityPending.stopTiming(); // Spigot
  
-         timings.tileEntityTick.startTiming(); // Spigot
+         this.timings.tileEntityTick.startTiming(); // Spigot
 +        profiler.startTimer(ca.spottedleaf.leafprofiler.LProfilerRegistry.TILE_ENTITY_TICK); try { // Folia - profiler
          // Spigot start
          // Iterator iterator = this.blockEntityTickers.iterator();
@@ -1873,7 +1801,7 @@ index f9641a54b2d1f2eed2a48323cfa6cdd67dafdf00..0ff6764c747ee6258ab9d722b48c24f0
          blockEntityTickers.removeAll(toRemove); // Folia - regionised ticking
 +        } finally { profiler.stopTimer(ca.spottedleaf.leafprofiler.LProfilerRegistry.TILE_ENTITY_TICK); } // Folia - profiler
  
-         timings.tileEntityTick.stopTiming(); // Spigot
+         this.timings.tileEntityTick.stopTiming(); // Spigot
          regionizedWorldData.seTtickingBlockEntities(false); // Folia - regionised ticking
 diff --git a/src/main/java/net/minecraft/world/level/block/entity/BlockEntityType.java b/src/main/java/net/minecraft/world/level/block/entity/BlockEntityType.java
 index 2c1bc515468e2ba99d463021758fb72ef160fbe9..93cc5523a1c3637bf4f04ff4ef0f8ef6e1050a59 100644
@@ -1913,7 +1841,7 @@ index 2c1bc515468e2ba99d463021758fb72ef160fbe9..93cc5523a1c3637bf4f04ff4ef0f8ef6
      }
  }
 diff --git a/src/main/java/net/minecraft/world/level/chunk/LevelChunk.java b/src/main/java/net/minecraft/world/level/chunk/LevelChunk.java
-index 20884dc82f8c95ec5ca92448c856fa9bc2c1e3ee..955d125e028f83a79068d5ad6aa7c38e67a5f55a 100644
+index 744fa3a3a62ffb4b3d1e7831c93fd76dee29fdd0..3c42478dd38d29dedc638e7bbbbd23818e111335 100644
 --- a/src/main/java/net/minecraft/world/level/chunk/LevelChunk.java
 +++ b/src/main/java/net/minecraft/world/level/chunk/LevelChunk.java
 @@ -1182,11 +1182,14 @@ public class LevelChunk extends ChunkAccess {
